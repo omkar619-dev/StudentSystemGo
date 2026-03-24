@@ -3,12 +3,12 @@ package main
 import (
 	
 	"fmt"
-	
+	"crypto/tls"
 	"log"
 	"net/http"
+	"restapi/internal/api/middlewares"
+	"time"
 	
-	
-	"strings"
 )
 
 type User struct {
@@ -27,69 +27,10 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Request method: %s\n", r.Method)
 		switch r.Method {
 		case http.MethodGet:
-			fmt.Println(r.URL.Path)
-			path := strings.TrimPrefix(r.URL.Path, "/teachers/")
-			userID := strings.TrimPrefix(path, "/")
-			fmt.Printf("Split parts: %v\n", userID)
-			fmt.Println("Query params",r.URL.Query())
-			queryParams := r.URL.Query()
-			sortBy := queryParams.Get("sortby")
-			key := queryParams.Get("key")
-			sortOrder := queryParams.Get("sortorder")
-			fmt.Printf("Sort by: %s, Key: %s, Sort order: %s\n", sortBy, key, sortOrder)
-			for key, value := range queryParams {
-				fmt.Printf("Query param: %s = %s\n", key, value)
-			}
 			w.Write([]byte("Hello GET Method on teachers route!"))
 			fmt.Println("Hello GET Method on teachers route!")
 			return
 		case http.MethodPost:
-			//parse form
-			// err := r.ParseForm()
-			// if err != nil {
-			// 	http.Error(w,"Error parsing form",http.StatusBadRequest)
-			// 	return
-			// }
-			// fmt.Printf("Form data: %v\n", r.Form)
-
-			// // prepare response data
-			// response := make(map[string]interface{})
-			// for key, value := range r.Form {
-			// 	if len(value) > 0 {
-			// 		response[key] = value[0]
-			// 	}
-			// }
-			// fmt.Printf("Response data: %v\n", response)
-
-			// // RAW BODY 
-			// body, err := io.ReadAll(r.Body)
-			// if err != nil {
-			// 	return
-			// }
-			// defer r.Body.Close()
-			// fmt.Printf("Raw body: %s\n", string(body))
-
-			// // if you expect json body, you can unmarshal it into a struct
-			// var userInstance User
-			// err = json.Unmarshal(body, &userInstance)
-			// if err != nil {
-			// 	return
-			// }
-			// fmt.Printf("User instance: %+v\n", userInstance)
-
-			// // acccessing request details
-			// fmt.Println("Body", r.Body)
-			// fmt.Println("Form", r.Form)
-			// fmt.Println("Header", r.Header)
-			// fmt.Println("Context", r.Context())
-			// fmt.Println("Method", r.Method)
-			// fmt.Println("HOST", r.Host)
-			// fmt.Println("Protocol", r.Proto)
-			// fmt.Println("RemoteAddr", r.RemoteAddr)
-			// fmt.Println("RequestURI", r.RequestURI)
-			// fmt.Println("URL", r.URL)
-			// fmt.Println("Port", r.URL.Port())
-
 			w.Write([]byte("Hello POST Method on teachers route!"))
 			fmt.Println("Hello POST Method on teachers route!")
 			return
@@ -118,52 +59,6 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("Hello GET Method on students route!")
 			return
 		case http.MethodPost:
-			//parse form
-			// err := r.ParseForm()
-			// if err != nil {
-			// 	http.Error(w,"Error parsing form",http.StatusBadRequest)
-			// 	return
-			// }
-			// fmt.Printf("Form data: %v\n", r.Form)
-
-			// // prepare response data
-			// response := make(map[string]interface{})
-			// for key, value := range r.Form {
-			// 	if len(value) > 0 {
-			// 		response[key] = value[0]
-			// 	}
-			// }
-			// fmt.Printf("Response data: %v\n", response)
-
-			// // RAW BODY 
-			// body, err := io.ReadAll(r.Body)
-			// if err != nil {
-			// 	return
-			// }
-			// defer r.Body.Close()
-			// fmt.Printf("Raw body: %s\n", string(body))
-
-			// // if you expect json body, you can unmarshal it into a struct
-			// var userInstance User
-			// err = json.Unmarshal(body, &userInstance)
-			// if err != nil {
-			// 	return
-			// }
-			// fmt.Printf("User instance: %+v\n", userInstance)
-
-			// // acccessing request details
-			// fmt.Println("Body", r.Body)
-			// fmt.Println("Form", r.Form)
-			// fmt.Println("Header", r.Header)
-			// fmt.Println("Context", r.Context())
-			// fmt.Println("Method", r.Method)
-			// fmt.Println("HOST", r.Host)
-			// fmt.Println("Protocol", r.Proto)
-			// fmt.Println("RemoteAddr", r.RemoteAddr)
-			// fmt.Println("RequestURI", r.RequestURI)
-			// fmt.Println("URL", r.URL)
-			// fmt.Println("Port", r.URL.Port())
-
 			w.Write([]byte("Hello POST Method on students route!"))
 			fmt.Println("Hello POST Method on students route!")
 			return
@@ -192,52 +87,6 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("Hello GET Method on execs route!")
 			return
 		case http.MethodPost:
-			//parse form
-			// err := r.ParseForm()
-			// if err != nil {
-			// 	http.Error(w,"Error parsing form",http.StatusBadRequest)
-			// 	return
-			// }
-			// fmt.Printf("Form data: %v\n", r.Form)
-
-			// // prepare response data
-			// response := make(map[string]interface{})
-			// for key, value := range r.Form {
-			// 	if len(value) > 0 {
-			// 		response[key] = value[0]
-			// 	}
-			// }
-			// fmt.Printf("Response data: %v\n", response)
-
-			// // RAW BODY 
-			// body, err := io.ReadAll(r.Body)
-			// if err != nil {
-			// 	return
-			// }
-			// defer r.Body.Close()
-			// fmt.Printf("Raw body: %s\n", string(body))
-
-			// // if you expect json body, you can unmarshal it into a struct
-			// var userInstance User
-			// err = json.Unmarshal(body, &userInstance)
-			// if err != nil {
-			// 	return
-			// }
-			// fmt.Printf("User instance: %+v\n", userInstance)
-
-			// // acccessing request details
-			// fmt.Println("Body", r.Body)
-			// fmt.Println("Form", r.Form)
-			// fmt.Println("Header", r.Header)
-			// fmt.Println("Context", r.Context())
-			// fmt.Println("Method", r.Method)
-			// fmt.Println("HOST", r.Host)
-			// fmt.Println("Protocol", r.Proto)
-			// fmt.Println("RemoteAddr", r.RemoteAddr)
-			// fmt.Println("RequestURI", r.RequestURI)
-			// fmt.Println("URL", r.URL)
-			// fmt.Println("Port", r.URL.Port())
-
 			w.Write([]byte("Hello POST Method on execs route!"))
 			fmt.Println("Hello POST Method on execs route!")
 			return
@@ -261,18 +110,34 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 
 	port := ":3000"
+	cert := "cert.pem"
+	key := "key.pem"
 
-	http.HandleFunc("/", rootHandler)
+	mux := http.NewServeMux()
 
-	http.HandleFunc("/teachers/", teachersHandler)
 
-	http.HandleFunc("/students/", studentsHandler)
+	mux.HandleFunc("/", rootHandler)
 
-	http.HandleFunc("/execs/", execsHandler)
+	mux.HandleFunc("/teachers/", teachersHandler)
 
+	mux.HandleFunc("/students/", studentsHandler)
+
+	mux.HandleFunc("/execs/", execsHandler)
+
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
+
+	rl := middlewares.NewRateLimiter(5, time.Minute)
+	//create custom server
+	server := &http.Server{
+		Addr:      port,
+		Handler: rl.Middleware(middlewares.Compression(middlewares.ResponseTimeMiddleware(middlewares.Cors(mux)))),
+		TLSConfig: tlsConfig,
+	}
 
 	fmt.Printf("Starting server on port %s\n", port)
-	err := http.ListenAndServe(port, nil)
+	err := server.ListenAndServeTLS(cert, key)
 	if err != nil {
 		log.Fatal("error starting the server")
 	}
