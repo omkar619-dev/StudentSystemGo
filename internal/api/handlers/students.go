@@ -107,8 +107,8 @@ page,limit := getPaginationParams(r)
 	respone := struct{
 		Status string `json:"status"`
 		Count int `json:"count"`
-		Page int  `json:page`
-		PageSize int  `json:page_size`
+		Page int  `json:"page"`
+		PageSize int  `json:"page_size"`
 		Data []models.Student `json:"data"`
 	}{
 	Status: "success",
