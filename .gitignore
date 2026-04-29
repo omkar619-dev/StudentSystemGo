@@ -58,6 +58,10 @@ teachersdata.json
 scripts/init.full.local.sql
 *.local.sql
 
+# Local docker-compose override (references gitignored files)
+docker-compose.override.yml
+# Note: docker-compose.override.example.yml IS committed (it's the template)
+
 # Docker volumes (if mounted locally)
 mysql_data/
 postgres_data/

@@ -9,13 +9,10 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      # Schema (committed to git, sanitized — no data)
+      # Schema only (committed to git, sanitized — no data).
+      # If you want seed data locally, create docker-compose.override.yml
+      # (see docker-compose.override.example.yml). The override is gitignored.
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-      # Seed data (local-only, gitignored). MariaDB runs files alphabetically,
-      # so 01-init.sql creates tables, then 02-seed.local.sql populates them.
-      # If this file doesn't exist on a fresh clone, MariaDB skips it (no error)
-      # and the container starts with empty tables — expected for public-repo clones.
-      - ./scripts/init.full.local.sql:/docker-entrypoint-initdb.d/02-seed.local.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s

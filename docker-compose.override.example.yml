@@ -1,0 +1,23 @@
+# Optional override file for local development.
+#
+# How it works:
+#   - docker-compose automatically loads `docker-compose.override.yml` if present
+#   - Anything here MERGES with the base docker-compose.yml
+#   - This .example file is committed to git as a template
+#   - Real docker-compose.override.yml is gitignored (it references local-only files)
+#
+# To use:
+#   1. Copy this file:    cp docker-compose.override.example.yml docker-compose.override.yml
+#   2. Have scripts/init.full.local.sql ready (with seed data — generate via mysqldump from your local DB)
+#   3. Run:               docker compose up
+#
+# Result: tables created from init.sql + seeded from init.full.local.sql
+#
+# If you don't create the override file, that's fine — `docker compose up` still works,
+# you just get empty tables. You can populate them via API or manual SQL after startup.
+
+services:
+  mysql:
+    volumes:
+      # Adds seed data on top of base schema
+      - ./scripts/init.full.local.sql:/docker-entrypoint-initdb.d/02-seed.local.sql:ro
