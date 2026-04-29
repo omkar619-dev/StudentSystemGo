@@ -1,9 +1,13 @@
 package middlewares
-import "net/http"
+import ("net/http" 
+          "fmt")
 
 
 func SecurityHeaders(next http.Handler) http.Handler {
+		fmt.Println("SECURITY HEADERS MIDDLEWARE...")
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Println("SECURITY HEADERS MIDDLEWARE BEING RETURNED...")
 		w.Header().Set("X-DNS-Prefetch-Control","off")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -13,6 +17,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Powered-By","Django")
 		next.ServeHTTP(w, r)
+		fmt.Println("SECURITY HEADERS MIDDLEWARE ENDED...")
 	})
 }
 

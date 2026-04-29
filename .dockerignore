@@ -1,0 +1,38 @@
+# Git
+.git
+.gitignore
+
+# Env files (secrets — must not bake into image)
+.env
+**/.env
+
+# Build outputs
+binaries/
+obfuscated_binaries/
+.gobuild/
+cmd/api/build/
+cmd/api/rest_api*
+**/*.exe
+
+# Docker / compose
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+*.test
+*.out
+coverage.*
+
+# Documentation noise (optional — usually fine to include)
+# *.md
+
+# Certs (we don't want them baked in — TLS off in container anyway)
+cert.pem
+key.pem

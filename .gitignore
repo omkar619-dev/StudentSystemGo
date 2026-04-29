@@ -26,7 +26,44 @@ go.work.sum
 
 # env file
 .env
+**/.env
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# TLS certs / private keys — NEVER commit
+*.pem
+*.key
+*.crt
+
+# Built binaries
+binaries/
+**/binaries/
+obfuscated_binaries/
+**/obfuscated_binaries/
+
+# Go build cache (sometimes leaks into project via GOCACHE=./build)
+.gobuild/
+**/.gobuild/
+build/
+**/build/
+
+# Test session artifacts
+cookies.txt
+*.cookies
+
+# Seed data files containing plaintext passwords — use init.sql instead
+execsdata.json
+studentsdatajson.txt
+teachersdata.json
+
+# Local-only seed data (not for public git, contains hashed passwords from local dev DB)
+scripts/init.full.local.sql
+*.local.sql
+
+# Docker volumes (if mounted locally)
+mysql_data/
+postgres_data/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

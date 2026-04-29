@@ -12,7 +12,10 @@ var allowedOrigins = []string{
 
 
 func Cors(next http.Handler) http.Handler {
+		fmt.Println("CORS MIDDLEWARE...")
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		
 		origin := r.Header.Get("Origin")
 		fmt.Printf("Origin: %s\n", origin)
 		if origin == "" || isOriginAllowed(origin) {
@@ -27,12 +30,25 @@ func Cors(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Expose-Headers","Authorization")
 		w.Header().Set("Access-Control-Max-Age", "3600")
+		if r.Method == http.MethodOptions {
+			return
+		}
 		next.ServeHTTP(w, r)
+		fmt.Println("CORS MIDDLEWARE ENDED...")
 	})
 }
 func isOriginAllowed(origin string) bool {
 	for _, allowedOrigin := range allowedOrigins {
 		if origin == allowedOrigin {
+			return true
+		}
+	}
+	return false
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
 			return true
 		}
 	}
