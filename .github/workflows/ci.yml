@@ -1,0 +1,99 @@
+name: CI
+
+# When this workflow runs
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Permissions for the GITHUB_TOKEN that runs the jobs.
+# Default permissions are read-only; we need write for ghcr.io push.
+permissions:
+  contents: read
+  packages: write
+
+# Top-level env vars available to every job/step
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}   # e.g., omkar619-dev/studentsystemgo
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # Job 1: lint + compile-check the Go code
+  # ─────────────────────────────────────────────────────────────
+  lint-and-build:
+    name: Lint & Build (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Read Go version from go.mod (single source of truth — no version drift)
+          go-version-file: go.mod
+          # Cache go modules + build cache between runs
+          cache: true
+
+      - name: Verify dependencies
+        run: go mod download
+
+      - name: Vet (static analysis)
+        run: go vet ./...
+
+      - name: Build all packages
+        run: go build ./...
+
+  # ─────────────────────────────────────────────────────────────
+  # Job 2: build the Docker image, optionally push to ghcr.io
+  # ─────────────────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build & Push
+    runs-on: ubuntu-latest
+    # Don't run docker job until lint-and-build passes
+    needs: lint-and-build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Login only on push to main (not on PRs — for security)
+      - name: Login to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Tagging strategy:
+          #   - 'latest' for pushes to main
+          #   - 'sha-abc1234' for every commit (rollback-friendly)
+          #   - 'pr-42' for pull requests
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build (and push if main)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          # Push only on main; PRs build but don't push
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache build layers between runs for speed
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
