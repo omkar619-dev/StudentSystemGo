@@ -129,13 +129,15 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d
             docker image prune -f
 
-      - name: Smoke test
-        # Hit healthz from the GitHub runner. Confirms the deploy actually works.
-        # Retry for 30 seconds in case container is still starting.
+      - name: Smoke test (via Nginx LB)
+        # Hit healthz through Nginx on port 80. Confirms:
+        #   1. Nginx is up
+        #   2. At least one app instance is up and serving
+        # Retry for 30 seconds in case containers are still starting.
         run: |
           set -e
           for i in {1..15}; do
-            if curl -fs --max-time 5 "http://${{ secrets.EC2_HOST }}:3000/healthz" > /dev/null; then
+            if curl -fs --max-time 5 "http://${{ secrets.EC2_HOST }}/healthz" > /dev/null; then
               echo "✅ Smoke test passed on attempt $i"
               exit 0
             fi
@@ -144,3 +146,11 @@ jobs:
           done
           echo "❌ Smoke test failed after 30s"
           exit 1
+
+      - name: Verify Nginx itself is healthy
+        # Nginx has a /nginx-health endpoint (returns 'ok' without touching app).
+        # Useful to distinguish "Nginx down" vs "app down" failure modes.
+        run: |
+          curl -fs --max-time 5 "http://${{ secrets.EC2_HOST }}/nginx-health"
+          echo ""
+          echo "✅ Nginx is responsive"
