@@ -129,6 +129,10 @@ jobs:
             # --remove-orphans ensures containers from a previous compose
             # version (e.g., a renamed service) are cleaned up automatically.
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            # Restart nginx AFTER apps are healthy so it re-resolves Docker DNS
+            # to the current app1/app2/app3 IPs (Nginx caches DNS at startup,
+            # and apps may have been recreated with new IPs above).
+            docker compose -f docker-compose.prod.yml restart nginx
             docker image prune -f
 
       - name: Smoke test (via Nginx LB)
