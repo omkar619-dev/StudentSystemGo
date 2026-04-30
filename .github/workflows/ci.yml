@@ -97,3 +97,50 @@ jobs:
           # Cache build layers between runs for speed
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────────────────────
+  # Job 3: deploy to EC2 (only on push to main)
+  # ─────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    # Run only on push to main, AND only after image has been pushed
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          # Commands run inside EC2 over SSH:
+          #   1. cd into the deployed repo
+          #   2. pull any infra changes (compose files, init.sql, etc.)
+          #   3. pull the new app image from ghcr.io
+          #   4. restart the stack (only re-creates containers that changed)
+          #   5. clean up dangling images to save disk
+          script: |
+            set -e
+            cd ~/StudentSystemGo
+            git pull origin main
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker image prune -f
+
+      - name: Smoke test
+        # Hit healthz from the GitHub runner. Confirms the deploy actually works.
+        # Retry for 30 seconds in case container is still starting.
+        run: |
+          set -e
+          for i in {1..15}; do
+            if curl -fs --max-time 5 "http://${{ secrets.EC2_HOST }}:3000/healthz" > /dev/null; then
+              echo "✅ Smoke test passed on attempt $i"
+              exit 0
+            fi
+            echo "Attempt $i failed, waiting..."
+            sleep 2
+          done
+          echo "❌ Smoke test failed after 30s"
+          exit 1
