@@ -22,6 +22,26 @@ services:
     networks:
       - app-net
 
+  redis:
+    image: redis:7-alpine
+    container_name: studentsystemgo-redis
+    restart: unless-stopped
+    # `--appendonly yes` enables persistence (writes log to disk) so data
+    # survives container restarts. For rate limiting we don't strictly need
+    # persistence (TTL keys are short-lived), but it's cheap insurance.
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"   # exposed on host for local debugging (redis-cli)
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-net
+
   app:
     build: .
     container_name: studentsystemgo-app
@@ -34,10 +54,13 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
       USE_TLS: "false"
+      REDIS_URL: redis://redis:6379
     ports:
       - "3000:3000"
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - app-net
@@ -47,3 +70,4 @@ networks:
 
 volumes:
   mysql_data:
+  redis_data:

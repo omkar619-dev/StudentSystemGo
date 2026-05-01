@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"time"
+
 	"restapi/internal/api/middlewares"
 	"restapi/internal/api/router"
+	myredis "restapi/internal/redis"
 	"restapi/internal/repository/sqlconnect"
 	"restapi/pkg/utils"
-	"os"
-	// "time"
 
 	"github.com/joho/godotenv"
-	// "golang.org/x/text/secure"
 )
 
 func getEnv(key, fallback string) string {
@@ -33,13 +34,27 @@ func main() {
 		log.Fatalf("failed to initialise database: %v", err)
 	}
 
+	if err := myredis.InitRedis(); err != nil {
+		log.Fatalf("failed to initialise redis: %v", err)
+	}
+	defer myredis.Close()
+
 	port := ":3000"
 
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 	}
 
-	// rl := middlewares.NewRateLimiter(5, time.Minute)
+	// Redis-backed rate limiters (replaces old in-memory rl).
+	// Two policies:
+	//   - global: 100 req/min per IP, applies to ALL routes
+	//   - login:  10 req/min per IP, applies ONLY to /execs/login (brute-force defense)
+	// State is in Redis → all 3 app instances share counters → no bypass via LB.
+	globalRateLimit := middlewares.RedisRateLimit("global", 100, time.Minute)
+	loginRateLimit := middlewares.PathOnly(
+		[]string{"/execs/login"},
+		middlewares.RedisRateLimit("login", 10, time.Minute),
+	)
 
 	hppOptions := middlewares.HPPOptions{
 		CheckBody: true,
@@ -62,6 +77,11 @@ func main() {
 	// 	rl.Middleware,
 	// 	middlewares.Cors,
 	// )
+	// Middleware order matters! Outermost first, innermost last.
+	// Request flow: Cors → ResponseTime → globalRateLimit → loginRateLimit
+	//             → jwtMiddleware → XSS → HPP → Compression → SecurityHeaders → router
+	// Rate limiters run EARLY (before expensive auth/db work) so we reject
+	// over-limit requests fast.
 	secureMux := utils.ApplyMiddlewares(
 		router,
 		middlewares.SecurityHeaders,
@@ -69,6 +89,8 @@ func main() {
 		middlewares.Hpp(hppOptions),
 		middlewares.XSSMiddleware,
 		jwtMiddleware,
+		loginRateLimit,    // stricter limit on /execs/login only
+		globalRateLimit,   // 100/min on everything
 		middlewares.ResponseTimeMiddleware,
 		middlewares.Cors,
 	)

@@ -22,6 +22,27 @@ services:
     networks:
       - app-net
 
+  # ── Redis: shared state for rate limiter (Phase 1 Step 5) ────
+  # All 3 app instances connect to the same Redis → shared rate-limit counters.
+  # Without Redis, each instance would have its own counters and effective
+  # rate limit would be N × stated limit (where N = number of app instances).
+  redis:
+    image: redis:7-alpine
+    container_name: studentsystemgo-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    expose:
+      - "6379"   # internal only — no public port mapping
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-net
+
   # ── 3 identical app instances ───────────────────────────
   # Same image, same env, different container names.
   # Nginx load-balances across them.
@@ -41,10 +62,13 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       RESET_TOKEN_EXP_DURATION: ${RESET_TOKEN_EXP_DURATION}
+      REDIS_URL: redis://redis:6379
     expose:
       - "3000"
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - app-net
@@ -63,10 +87,13 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       RESET_TOKEN_EXP_DURATION: ${RESET_TOKEN_EXP_DURATION}
+      REDIS_URL: redis://redis:6379
     expose:
       - "3000"
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - app-net
@@ -85,10 +112,13 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       RESET_TOKEN_EXP_DURATION: ${RESET_TOKEN_EXP_DURATION}
+      REDIS_URL: redis://redis:6379
     expose:
       - "3000"
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - app-net
@@ -114,3 +144,4 @@ networks:
 
 volumes:
   mysql_data:
+  redis_data:
