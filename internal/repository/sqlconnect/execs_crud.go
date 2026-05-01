@@ -20,7 +20,7 @@ import (
 )
 
 func GetExecsDBHandler(execs []models.Exec, r *http.Request) ([]models.Exec, error) {
-	db, err := ConnectDb("schooldb")
+	db, err := ConnectReadDb("schooldb") // SELECT — replica is fine
 	if err != nil {
 		// http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
 		return nil, utils.ErrorHandler(err, "Failed to connect to database")
@@ -62,7 +62,7 @@ func GetExecsDBHandler(execs []models.Exec, r *http.Request) ([]models.Exec, err
 }
 
 func GetExecByID(id int) (models.Exec, error) {
-	db, err := ConnectDb("schooldb")
+	db, err := ConnectReadDb("schooldb") // SELECT — replica is fine
 	if err != nil {
 		// http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
 		return models.Exec{}, utils.ErrorHandler(err, "Failed to connect to database")
@@ -304,6 +304,10 @@ func DeleteOneExec(id int) error {
 }
 
 func GetUserByUsername(username string) (*models.Exec, error) {
+	// Login auth — explicitly use PRIMARY (Write pool).
+	// New signups / password changes must work immediately;
+	// using the replica here would cause race conditions where a fresh user
+	// appears to "not exist" for a few seconds after creation.
 	db, err := ConnectDb("schooldb")
 	if err != nil {
 		log.Println(err)

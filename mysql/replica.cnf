@@ -1,0 +1,30 @@
+# MariaDB replica (read-only) configuration overlay.
+# Mounted at /etc/mysql/conf.d/replica.cnf in the replica container.
+
+[mariadb]
+# ── Server identity ────────────────────────────────────────
+# Different server-id from primary AND any other replicas.
+server-id = 2
+
+# ── Relay log (where pulled binlog events are buffered) ───
+# I/O thread writes here; SQL thread reads from here to apply.
+relay_log = relay-bin
+relay_log_index = relay-bin.index
+
+# ── Read-only enforcement ─────────────────────────────────
+# Reject all writes from clients (only replication SQL thread can write).
+# Note: MariaDB doesn't have super_read_only (that's MySQL-only). SUPER users
+# can technically still write — we just trust ourselves not to do that.
+read_only = ON
+
+# ── Replica also writes to its own binlog ─────────────────
+# Lets you chain replicas (replica-of-a-replica) later if needed.
+# Also lets us promote this replica to primary cleanly.
+log_bin = mysql-bin
+log_slave_updates = ON
+
+# ── GTID matching primary ────────────────────────────────
+gtid_strict_mode = ON
+
+# ── Same memory tuning as primary ────────────────────────
+innodb_buffer_pool_size = 96M

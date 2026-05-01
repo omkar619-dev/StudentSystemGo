@@ -1,18 +1,22 @@
 services:
-  mysql:
-    image: mariadb:11  
-    container_name: studentsystemgo-mysql
+  # ── PRIMARY (writes go here) ──────────────────────────────
+  mysql_primary:
+    image: mariadb:11
+    container_name: studentsystemgo-mysql-primary
     environment:
       MARIADB_ROOT_PASSWORD: ${DB_PASSWORD}
       MARIADB_DATABASE: ${DB_NAME}
     ports:
-      - "3307:3306"
+      - "3307:3306"   # exposed on host for local debugging via mysql client
     volumes:
-      - mysql_data:/var/lib/mysql
-      # Schema only (committed to git, sanitized — no data).
-      # If you want seed data locally, create docker-compose.override.yml
-      # (see docker-compose.override.example.yml). The override is gitignored.
+      - mysql_primary_data:/var/lib/mysql
+      # Schema (committed to git, sanitized — no data).
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      # Replication user creation (runs BEFORE init.sql so replicator account
+      # is in primary's binlog history → replica replays it on its own data).
+      - ./mysql/init/00-replication-user.sql:/docker-entrypoint-initdb.d/00-replication-user.sql:ro
+      # Primary-specific config: server-id=1, binlog enabled, GTID
+      - ./mysql/primary.cnf:/etc/mysql/conf.d/primary.cnf:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
@@ -22,18 +26,45 @@ services:
     networks:
       - app-net
 
+  # ── REPLICA (reads go here) ───────────────────────────────
+  # Read-only. Pulls binlog from primary and replays.
+  # On first boot, takes ~10-20s to catch up to primary's current state.
+  mysql_replica:
+    image: mariadb:11
+    container_name: studentsystemgo-mysql-replica
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD}
+      MARIADB_DATABASE: ${DB_NAME}
+    ports:
+      - "3308:3306"   # different host port from primary for local debugging
+    volumes:
+      - mysql_replica_data:/var/lib/mysql
+      # Replica-specific init: CHANGE MASTER + START SLAVE.
+      # Runs AFTER MariaDB has created the data dir but before fully ready.
+      - ./mysql/init/99-set-up-replication.sql:/docker-entrypoint-initdb.d/99-set-up-replication.sql:ro
+      # Replica-specific config: server-id=2, read_only=ON, log_slave_updates
+      - ./mysql/replica.cnf:/etc/mysql/conf.d/replica.cnf:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      mysql_primary:
+        condition: service_healthy
+    networks:
+      - app-net
+
   redis:
     image: redis:7-alpine
     container_name: studentsystemgo-redis
     restart: unless-stopped
-    # `--appendonly yes` enables persistence (writes log to disk) so data
-    # survives container restarts. For rate limiting we don't strictly need
-    # persistence (TTL keys are short-lived), but it's cheap insurance.
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"   # exposed on host for local debugging (redis-cli)
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -48,7 +79,9 @@ services:
     env_file:
       - .env
     environment:
-      HOST: mysql
+      # Primary (writes) and replica (reads) hostnames.
+      DB_PRIMARY_HOST: mysql_primary
+      DB_REPLICA_HOST: mysql_replica
       DB_PORT: "3306"
       DB_USER: root
       DB_PASSWORD: ${DB_PASSWORD}
@@ -58,7 +91,9 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      mysql:
+      mysql_primary:
+        condition: service_healthy
+      mysql_replica:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -69,5 +104,6 @@ networks:
   app-net:
 
 volumes:
-  mysql_data:
+  mysql_primary_data:
+  mysql_replica_data:
   redis_data:

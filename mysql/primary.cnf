@@ -1,0 +1,38 @@
+# MariaDB primary (write) configuration overlay.
+# Mounted at /etc/mysql/conf.d/primary.cnf in the primary container.
+# MariaDB merges this with its built-in defaults.
+
+[mariadb]
+# ── Server identity ────────────────────────────────────────
+# Must be unique across primary + all replicas.
+server-id = 1
+
+# ── Binary log (required for replication) ─────────────────
+# Primary records every change here so replicas can replay.
+log_bin = mysql-bin
+log_bin_index = mysql-bin.index
+
+# ROW format = log full-row data per change.
+# Safer than STATEMENT (which logs the SQL — non-deterministic queries
+# like NOW() can produce different results on replica).
+binlog_format = ROW
+binlog_row_image = FULL
+
+# ── GTID-based replication ────────────────────────────────
+# Each transaction gets a globally-unique ID. Way easier than tracking
+# (filename, position) pairs. Required for clean failover later.
+gtid_strict_mode = ON
+
+# Don't fsync binlog after every write (faster).
+# Trade-off: small chance of losing the last few transactions if primary
+# crashes hard. For production: sync_binlog = 1 (slower, safer).
+sync_binlog = 0
+
+# Auto-purge binlogs older than 7 days.
+# A replica that's been disconnected longer needs a full re-sync.
+expire_logs_days = 7
+
+# ── Memory tuning for t3.micro ────────────────────────────
+# Default buffer pool (128M) is too big when running primary + replica
+# alongside apps + Redis on 1 GB RAM.
+innodb_buffer_pool_size = 96M

@@ -14,7 +14,7 @@ import (
 )
 
 func GetStudentsDBHandler(students []models.Student, r *http.Request,limit,page int) ([]models.Student,int, error) {
-	db, err := ConnectDb("schooldb")
+	db, err := ConnectReadDb("schooldb") // SELECT — replica is fine
 	if err != nil {
 		// http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
 		return nil, 0,utils.ErrorHandler(err, "Failed to connect to database")
@@ -61,7 +61,7 @@ func GetStudentsDBHandler(students []models.Student, r *http.Request,limit,page 
 }
 
 func GetStudentByID(id int) (models.Student, error) {
-	db, err := ConnectDb("schooldb")
+	db, err := ConnectReadDb("schooldb") // SELECT — replica is fine
 	if err != nil {
 		// http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
 		return models.Student{}, utils.ErrorHandler(err, "Failed to connect to database")

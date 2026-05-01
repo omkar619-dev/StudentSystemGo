@@ -13,7 +13,7 @@ import (
 )
 
 func GetTeachersDBHandler(teachers []models.Teacher, r *http.Request) ([]models.Teacher, error) {
-	db, err := ConnectDb("schooldb")
+	db, err := ConnectReadDb("schooldb") // SELECT — replica is fine
 	if err != nil {
 		// http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
 		return nil, utils.ErrorHandler(err, "Failed to connect to database")
@@ -55,7 +55,7 @@ func GetTeachersDBHandler(teachers []models.Teacher, r *http.Request) ([]models.
 }
 
 func GetTeacherByID(id int) (models.Teacher, error) {
-	db, err := ConnectDb("schooldb")
+	db, err := ConnectReadDb("schooldb") // SELECT — replica is fine
 	if err != nil {
 		// http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
 		return models.Teacher{}, utils.ErrorHandler(err, "Failed to connect to database")
@@ -397,7 +397,7 @@ func DeleteTeachers(ids []int) ([]int, error) {
 	return deletedIds, nil
 }
 func GetStudentsByTeacherIdromDb(teacherid string, w http.ResponseWriter, students []models.Student) ([]models.Student, error) {
-	db, err := ConnectDb("schooldb")
+	db, err := ConnectReadDb("schooldb") // SELECT — replica is fine
 
 	if err != nil {
 		log.Println(err)
@@ -434,7 +434,7 @@ func GetStudentsByTeacherIdromDb(teacherid string, w http.ResponseWriter, studen
 
 
 func GetStudentCountByTeacherIdFromDb(teacherid string) (int,error) {
-	db, err := ConnectDb("schooldb")
+	db, err := ConnectReadDb("schooldb") // SELECT — replica is fine
 	if err != nil {
 		log.Println(err)
 		return 0, utils.ErrorHandler(err, "Failed to connect to database")
