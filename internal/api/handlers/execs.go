@@ -1,19 +1,19 @@
 package handlers
 
 import (
-
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
+	"time"
 
+	"restapi/internal/cache"
 	"restapi/internal/models"
 	"restapi/internal/repository/sqlconnect"
 	"restapi/pkg/utils"
-	"strconv"
-	"time"
 )
 
 // func ExecsHandler(w http.ResponseWriter, r *http.Request) {
@@ -57,8 +57,14 @@ import (
 	// logic to get all teachers
 	// firstName := r.URL.Query().Get("first_name")
 	// lastName := r.URL.Query().Get("last_name")
+		// ── Cache-aside ───────────────────────────────────────
+		cacheKey := cache.KeyPrefix + "execs:list:" + r.URL.RawQuery
 		var execs []models.Exec
-		execs, err := sqlconnect.GetExecsDBHandler(execs, r)
+		err := cache.GetOrFetch(r.Context(), cacheKey, cache.DefaultTTL, &execs, func() (any, error) {
+			var fresh []models.Exec
+			fresh, err := sqlconnect.GetExecsDBHandler(fresh, r)
+			return fresh, err
+		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -195,7 +201,8 @@ for _,exec := range rawExecs{
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
+	cache.InvalidatePattern(r.Context(), cache.KeyPrefix+"execs:list:*")
 
 	w.Header().Set("Content-type","application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -272,6 +279,7 @@ func PatchOneExecsHandler(w http.ResponseWriter, r *http.Request){
  	http.Error(w, err.Error(), http.StatusInternalServerError)
  	return
  }
+cache.InvalidatePattern(r.Context(), cache.KeyPrefix+"execs:list:*")
 w.Header().Set("Content-Type", "application/json")
 json.NewEncoder(w).Encode(updatedExec)
 }
@@ -304,6 +312,8 @@ func DeleteOneExecHandler(w http.ResponseWriter, r *http.Request){
  	http.Error(w, err.Error(), http.StatusInternalServerError)
  	return
  }
+
+	cache.InvalidatePattern(r.Context(), cache.KeyPrefix+"execs:list:*")
 
 	w.WriteHeader(http.StatusNoContent)
 
@@ -344,6 +354,8 @@ func PatchExecsHandler(w http.ResponseWriter, r *http.Request){
 	 http.Error(w, err.Error(), http.StatusInternalServerError)
 	 return
  }
+
+	cache.InvalidatePattern(r.Context(), cache.KeyPrefix+"execs:list:*")
 
 	w.WriteHeader(http.StatusNoContent)
 }

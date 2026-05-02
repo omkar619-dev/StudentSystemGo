@@ -6,12 +6,12 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
+
+	"restapi/internal/cache"
 	"restapi/internal/models"
 	"restapi/internal/repository/sqlconnect"
 	"restapi/pkg/utils"
-	"strconv"
-
-
 )
 
 // type User struct {
@@ -86,14 +86,27 @@ func GetStudentsHandler(w http.ResponseWriter, r *http.Request) {
 
 page,limit := getPaginationParams(r)
 
-
-
-		var students []models.Student
-		students, totalStudents,err := sqlconnect.GetStudentsDBHandler(students, r,limit,page)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	// ── Cache-aside ───────────────────────────────────────
+	// GetStudentsDBHandler returns 3 values (list, total, err). We wrap
+	// list+total in a struct so the cache stores them together — otherwise
+	// hits would be missing the total count.
+	cacheKey := cache.KeyPrefix + "students:list:" + r.URL.RawQuery
+	type cachedStudents struct {
+		List  []models.Student `json:"list"`
+		Total int              `json:"total"`
+	}
+	var cached cachedStudents
+	err := cache.GetOrFetch(r.Context(), cacheKey, cache.DefaultTTL, &cached, func() (any, error) {
+		var fresh []models.Student
+		fresh, total, err := sqlconnect.GetStudentsDBHandler(fresh, r, limit, page)
+		return cachedStudents{List: fresh, Total: total}, err
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	students := cached.List
+	totalStudents := cached.Total
 
 	// for _, teacher := range teachers {
 	// 	if(firstName == "" || teacher.FirstName == firstName) && (lastName == "" || teacher.LastName == lastName){
@@ -245,7 +258,8 @@ for _,student := range rawStudents{
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
+	cache.InvalidatePattern(r.Context(), cache.KeyPrefix+"students:list:*")
 
 	w.Header().Set("Content-type","application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -293,6 +307,7 @@ func UpdateStudentHandler(w http.ResponseWriter, r *http.Request) {
 	 http.Error(w, err.Error(), http.StatusInternalServerError)
 	 return
  }
+cache.InvalidatePattern(r.Context(), cache.KeyPrefix+"students:list:*")
 w.Header().Set("Content-Type", "application/json")
 json.NewEncoder(w).Encode(updatedStudentFromDB)
 
@@ -331,6 +346,7 @@ func PatchOneStudentHandler(w http.ResponseWriter, r *http.Request){
  	http.Error(w, err.Error(), http.StatusInternalServerError)
  	return
  }
+cache.InvalidatePattern(r.Context(), cache.KeyPrefix+"students:list:*")
 w.Header().Set("Content-Type", "application/json")
 json.NewEncoder(w).Encode(updatedStudent)
 
@@ -365,6 +381,8 @@ func DeleteOneStudentHandler(w http.ResponseWriter, r *http.Request){
  	return
  }
 
+	cache.InvalidatePattern(r.Context(), cache.KeyPrefix+"students:list:*")
+
 	w.WriteHeader(http.StatusNoContent)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -374,7 +392,7 @@ func DeleteOneStudentHandler(w http.ResponseWriter, r *http.Request){
 		Status: "Student successfully deleted",
 		ID: id,
 	}
-	json.NewEncoder(w).Encode(response)	 
+	json.NewEncoder(w).Encode(response)
 }
 
 
@@ -404,6 +422,8 @@ func PatchStudentsHandler(w http.ResponseWriter, r *http.Request){
 	 http.Error(w, err.Error(), http.StatusInternalServerError)
 	 return
  }
+
+	cache.InvalidatePattern(r.Context(), cache.KeyPrefix+"students:list:*")
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -435,6 +455,8 @@ func DeleteStudentsHandler(w http.ResponseWriter, r *http.Request){
  	http.Error(w, err.Error(), http.StatusInternalServerError)
  	return
  }
+
+	cache.InvalidatePattern(r.Context(), cache.KeyPrefix+"students:list:*")
 
 	w.Header().Set("Content-Type", "application/json")
 	response := struct{
