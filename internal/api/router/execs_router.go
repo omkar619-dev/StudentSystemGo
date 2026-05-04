@@ -19,5 +19,13 @@ func execsRouter() *http.ServeMux {
 	mux.HandleFunc("POST /execs/forgotpassword", handlers.ForgotPasswordHandler)
 	mux.HandleFunc("POST /execs/resetpassword/reset/{resetcode}", handlers.ResetPasswordHandler)
 	mux.HandleFunc("POST /execs/{id}/updatepassword", handlers.UpdatePasswordHandler)
+
+	// Photo endpoints — see docs/photo-flow.md.
+	// Read access tighter than students/teachers: admin/manager/exec only.
+	// Delete restricted to admin.
+	mux.HandleFunc("POST /execs/{id}/photo/presign-upload", handlers.PresignExecPhotoUploadHandler)
+	mux.HandleFunc("POST /execs/{id}/photo/confirm", handlers.ConfirmExecPhotoHandler)
+	mux.HandleFunc("GET /execs/{id}/photo", handlers.GetExecPhotoHandler)
+	mux.HandleFunc("DELETE /execs/{id}/photo", handlers.DeleteExecPhotoHandler)
 	return mux
 }

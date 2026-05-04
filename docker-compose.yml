@@ -10,10 +10,12 @@ services:
       - "3307:3306"   # exposed on host for local debugging via mysql client
     volumes:
       - mysql_primary_data:/var/lib/mysql
-      # Schema (committed to git, sanitized — no data).
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-      # Replication user creation (runs BEFORE init.sql so replicator account
-      # is in primary's binlog history → replica replays it on its own data).
+      # Schema is now owned by golang-migrate (see internal/dbmigrate/).
+      # The app applies migrations at startup against the primary.
+      # No schema init.sql mounted here anymore.
+      #
+      # Replication user creation (runs in primary's binlog history → replica
+      # replays it on its own data so the same user exists on both).
       - ./mysql/init/00-replication-user.sql:/docker-entrypoint-initdb.d/00-replication-user.sql:ro
       # Primary-specific config: server-id=1, binlog enabled, GTID
       - ./mysql/primary.cnf:/etc/mysql/conf.d/primary.cnf:ro
@@ -88,6 +90,21 @@ services:
       DB_NAME: ${DB_NAME}
       USE_TLS: "false"
       REDIS_URL: redis://redis:6379
+      # Photo storage — values come from .env
+      S3_BUCKET: ${S3_BUCKET}
+      S3_REGION: ${S3_REGION}
+      CF_DOMAIN: ${CF_DOMAIN}
+      CF_KEY_PAIR_ID: ${CF_KEY_PAIR_ID}
+      CF_PRIVATE_KEY_PATH: /etc/secrets/cloudfront_private_key.pem
+      # AWS credentials for local dev. On EC2 these are unset and the SDK
+      # falls back to the IAM role attached to the instance.
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      # CloudFront RSA private key — bind-mount read-only.
+      - ./secrets/cloudfront_private_key.pem:/etc/secrets/cloudfront_private_key.pem:ro
+      # AWS creds for local dev are passed via .env env vars (see above).
+      # Production uses EC2 IAM role; no env vars set there.
     ports:
       - "3000:3000"
     depends_on:

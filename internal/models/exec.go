@@ -15,6 +15,7 @@ type Exec struct {
 	PasswordResetCodeExpires sql.NullString `json:"password_reset_code_expires,omitempty" db:"password_reset_code_expires,omitempty"`
 	InactiveStatus    bool   `json:"inactive_status,omitempty" db:"inactive_status,omitempty"`
 	Role              string `json:"role,omitempty" db:"role,omitempty"`
+	PhotoS3Key        string `json:"-" db:"photo_s3_key,omitempty"`
 }
 
 type UpdatePassword struct {

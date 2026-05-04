@@ -11,7 +11,7 @@ services:
       - "3306"
     volumes:
       - mysql_primary_data:/var/lib/mysql
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      # Schema owned by golang-migrate (applied by app at startup).
       - ./mysql/init/00-replication-user.sql:/docker-entrypoint-initdb.d/00-replication-user.sql:ro
       - ./mysql/primary.cnf:/etc/mysql/conf.d/primary.cnf:ro
     healthcheck:
@@ -87,6 +87,16 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       RESET_TOKEN_EXP_DURATION: ${RESET_TOKEN_EXP_DURATION}
       REDIS_URL: redis://redis:6379
+      # Photo storage
+      S3_BUCKET: ${S3_BUCKET}
+      S3_REGION: ${S3_REGION}
+      CF_DOMAIN: ${CF_DOMAIN}
+      CF_KEY_PAIR_ID: ${CF_KEY_PAIR_ID}
+      CF_PRIVATE_KEY_PATH: /etc/secrets/cloudfront_private_key.pem
+      # No AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in prod — SDK uses
+      # the EC2 IAM role's instance metadata credentials.
+    volumes:
+      - ./secrets/cloudfront_private_key.pem:/etc/secrets/cloudfront_private_key.pem:ro
     expose:
       - "3000"
     depends_on:
@@ -115,6 +125,16 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       RESET_TOKEN_EXP_DURATION: ${RESET_TOKEN_EXP_DURATION}
       REDIS_URL: redis://redis:6379
+      # Photo storage
+      S3_BUCKET: ${S3_BUCKET}
+      S3_REGION: ${S3_REGION}
+      CF_DOMAIN: ${CF_DOMAIN}
+      CF_KEY_PAIR_ID: ${CF_KEY_PAIR_ID}
+      CF_PRIVATE_KEY_PATH: /etc/secrets/cloudfront_private_key.pem
+      # No AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in prod — SDK uses
+      # the EC2 IAM role's instance metadata credentials.
+    volumes:
+      - ./secrets/cloudfront_private_key.pem:/etc/secrets/cloudfront_private_key.pem:ro
     expose:
       - "3000"
     depends_on:

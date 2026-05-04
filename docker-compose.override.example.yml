@@ -17,7 +17,8 @@
 # you just get empty tables. You can populate them via API or manual SQL after startup.
 
 services:
-  mysql:
+  mysql_primary:
     volumes:
-      # Adds seed data on top of base schema
+      # Adds seed data on top of base schema. ONLY mounted on primary —
+      # replica receives the same rows via replication once it catches up.
       - ./scripts/init.full.local.sql:/docker-entrypoint-initdb.d/02-seed.local.sql:ro

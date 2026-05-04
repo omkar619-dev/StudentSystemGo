@@ -10,8 +10,10 @@ import (
 
 	"restapi/internal/api/middlewares"
 	"restapi/internal/api/router"
+	"restapi/internal/dbmigrate"
 	myredis "restapi/internal/redis"
 	"restapi/internal/repository/sqlconnect"
+	"restapi/internal/storage/photo"
 	"restapi/pkg/utils"
 
 	"github.com/joho/godotenv"
@@ -34,10 +36,36 @@ func main() {
 		log.Fatalf("failed to initialise database: %v", err)
 	}
 
+	// Run pending schema migrations against PRIMARY only.
+	// Replica picks up DDL via binlog replication.
+	// Idempotent — no-op when schema is already current.
+	if err := dbmigrate.Run(dbmigrate.Config{
+		Host:     getEnv("DB_PRIMARY_HOST", "mysql_primary"),
+		Port:     getEnv("DB_PORT", "3306"),
+		User:     getEnv("DB_USER", "root"),
+		Password: getEnv("DB_PASSWORD", ""),
+		DBName:   getEnv("DB_NAME", "schooldb"),
+	}); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
+	}
+
 	if err := myredis.InitRedis(); err != nil {
 		log.Fatalf("failed to initialise redis: %v", err)
 	}
 	defer myredis.Close()
+
+	// Initialise the S3 + CloudFront photo storage layer.
+	// Fails fast if env vars are missing or the CF private key file is
+	// unreadable. See docs/photo-flow.md for env var reference.
+	if err := photo.Init(photo.Config{
+		Bucket:          getEnv("S3_BUCKET", ""),
+		Region:          getEnv("S3_REGION", "ap-south-1"),
+		CFDomain:        getEnv("CF_DOMAIN", ""),
+		CFKeyPairID:     getEnv("CF_KEY_PAIR_ID", ""),
+		CFPrivateKeyPth: getEnv("CF_PRIVATE_KEY_PATH", "/etc/secrets/cloudfront_private_key.pem"),
+	}); err != nil {
+		log.Fatalf("failed to initialise photo storage: %v", err)
+	}
 
 	port := ":3000"
 

@@ -21,5 +21,11 @@ func teachersRouter() *http.ServeMux {
 	
 	mux.HandleFunc("GET /teachers/{id}/students", handlers.GetStudentsByTeacherId)
 	mux.HandleFunc("GET /teachers/{id}/studentcount", handlers.GetStudentCountByTeacherId)
+
+	// Photo endpoints — see docs/photo-flow.md
+	mux.HandleFunc("POST /teachers/{id}/photo/presign-upload", handlers.PresignTeacherPhotoUploadHandler)
+	mux.HandleFunc("POST /teachers/{id}/photo/confirm", handlers.ConfirmTeacherPhotoHandler)
+	mux.HandleFunc("GET /teachers/{id}/photo", handlers.GetTeacherPhotoHandler)
+	mux.HandleFunc("DELETE /teachers/{id}/photo", handlers.DeleteTeacherPhotoHandler)
 return mux
 }

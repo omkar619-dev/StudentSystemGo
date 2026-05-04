@@ -33,6 +33,10 @@ go.work.sum
 *.key
 *.crt
 
+# Secrets directory (CloudFront private key, etc.)
+secrets/
+**/secrets/
+
 # Built binaries
 binaries/
 **/binaries/

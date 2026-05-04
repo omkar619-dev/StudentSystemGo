@@ -7,4 +7,5 @@ LastName string `json:"last_name,omitempty" db:"last_name,omitempty"`
 Email string `json:"email,omitempty" db:"email,omitempty"`
 Class string `json:"class,omitempty" db:"class,omitempty"`
 Subject string `json:"subject,omitempty" db:"subject,omitempty"`
+PhotoS3Key string `json:"-" db:"photo_s3_key,omitempty"`
 }
