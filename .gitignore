@@ -53,6 +53,13 @@ build/
 cookies.txt
 *.cookies
 
+# Local API test scratch files (per-shell artifacts from smoke testing)
+confirm.json
+presign.json
+new_student.json
+test_download.jpg
+test_download.*
+
 # Seed data files containing plaintext passwords — use init.sql instead
 execsdata.json
 studentsdatajson.txt

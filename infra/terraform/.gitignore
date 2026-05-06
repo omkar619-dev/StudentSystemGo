@@ -1,0 +1,26 @@
+# Terraform local working directory — provider binaries, plugins
+.terraform/
+**/.terraform/
+
+# State files — contain raw resource attributes including some secrets-adjacent data
+# (bucket policies, ARNs, IDs). For team setups, state goes in remote backend (S3 + DynamoDB).
+# For now (single dev), state is local but gitignored.
+*.tfstate
+*.tfstate.*
+
+# Plan output files — usually transient
+*.tfplan
+plan.out
+
+# CLI override files — can have local-only overrides
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Crash log
+crash.log
+crash.*.log
+
+# Note: .terraform.lock.hcl IS committed.
+# It pins exact provider versions across team members for reproducibility.
