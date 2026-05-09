@@ -7,11 +7,14 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
 	"restapi/internal/cache"
+	"restapi/internal/mailer"
 	"restapi/internal/models"
+	mq "restapi/internal/queue/rabbitmq"
 	"restapi/internal/repository/sqlconnect"
 	"restapi/pkg/utils"
 )
@@ -507,25 +510,53 @@ return
 	json.NewEncoder(w).Encode(response)
 }
 
-func ForgotPasswordHandler(w http.ResponseWriter, r *http.Request){
- var req struct {
-	Email string `json:"email"`
- }
- err := json.NewDecoder(r.Body).Decode(&req)
- if err !=nil{
-	http.Error(w,"Invalid request body",http.StatusBadRequest)
-	return
- }
- r.Body.Close()
+func ForgotPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
 
-err = sqlconnect.ForgotPasswordDBHandler(req.Email)
-if err != nil {
-	http.Error(w,err.Error(),http.StatusBadRequest)
-	return
+	// Step 1: synchronously create the reset token in DB.
+	// Failures here surface to the caller (e.g., user not found).
+	info, err := sqlconnect.PrepareResetToken(req.Email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Step 2: enqueue the email for the worker to send.
+	// If the queue is healthy, this returns in single-digit ms.
+	// If RabbitMQ is down, fail-closed: tell the user to retry.
+	// (Token is already in DB; user can re-trigger forgot-password.)
+	baseURL := getEnv("APP_BASE_URL", "http://localhost:3000")
+	msg := mailer.PasswordResetMessage{
+		To:         req.Email,
+		Username:   info.Username,
+		ResetToken: info.Token,
+		ResetURL:   fmt.Sprintf("%s/execs/resetpassword/reset/%s", baseURL, info.Token),
+		ExpiresAt:  info.ExpiresAt.Format(time.RFC3339),
+	}
+	if err := mq.DefaultPublisher.PublishJSON(r.Context(), mq.QueuePasswordReset, msg); err != nil {
+		log.Printf("[forgotpw] enqueue failed for %s: %v", req.Email, err)
+		http.Error(w, "Email service temporarily unavailable, please retry", http.StatusServiceUnavailable)
+		return
+	}
+
+	// 202 Accepted — request acknowledged, processing happens async.
+	w.WriteHeader(http.StatusAccepted)
+	fmt.Fprintf(w, "Password reset link is being sent to %s", req.Email)
 }
 
-// resopond with success message
-	fmt.Fprintf(w,"Password reset link sent to %s",req.Email)
+// getEnv returns env var or fallback. Kept here so handlers don't depend on cmd/api.
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 type request struct{
 		NewPassword string `json:"new_password"`

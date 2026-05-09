@@ -11,6 +11,8 @@ import (
 	"restapi/internal/api/middlewares"
 	"restapi/internal/api/router"
 	"restapi/internal/dbmigrate"
+	"restapi/internal/metrics"
+	mq "restapi/internal/queue/rabbitmq"
 	myredis "restapi/internal/redis"
 	"restapi/internal/repository/sqlconnect"
 	"restapi/internal/storage/photo"
@@ -57,6 +59,24 @@ func main() {
 	// Initialise the S3 + CloudFront photo storage layer.
 	// Fails fast if env vars are missing or the CF private key file is
 	// unreadable. See docs/photo-flow.md for env var reference.
+	// Connect to RabbitMQ + open a publisher channel.
+	// Fail-closed: without the broker, async work doesn't work.
+	mqClient, err := mq.Connect()
+	if err != nil {
+		log.Fatalf("failed to connect to rabbitmq: %v", err)
+	}
+	defer mqClient.Close()
+
+	if err := mq.DeclareTopology(mqClient); err != nil {
+		log.Fatalf("failed to declare rabbitmq topology: %v", err)
+	}
+
+	pub, err := mq.InitPublisher(mqClient)
+	if err != nil {
+		log.Fatalf("failed to init rabbitmq publisher: %v", err)
+	}
+	defer pub.Close()
+
 	if err := photo.Init(photo.Config{
 		Bucket:          getEnv("S3_BUCKET", ""),
 		Region:          getEnv("S3_REGION", "ap-south-1"),
@@ -93,7 +113,7 @@ func main() {
 
 	router := router.MainRouter()
 	// secureMux := middlewares.Cors(rl.Middleware(middlewares.ResponseTimeMiddleware(middlewares.Compression(middlewares.Hpp(hppOptions)(middlewares.SecurityHeaders(mux)))))),
-	jwtMiddleware := middlewares.MiddlewaresExcludePaths(middlewares.JWTMiddleware,"/execs/login","/execs/forgotpassword","/execs/resetpassword/reset","/healthz")
+	jwtMiddleware := middlewares.MiddlewaresExcludePaths(middlewares.JWTMiddleware,"/execs/login","/execs/forgotpassword","/execs/resetpassword/reset","/healthz","/metrics")
 	// secureMux := utils.ApplyMiddlewares(
 	// 	router,
 	// 	middlewares.SecurityHeaders,
@@ -119,6 +139,7 @@ func main() {
 		jwtMiddleware,
 		loginRateLimit,    // stricter limit on /execs/login only
 		globalRateLimit,   // 100/min on everything
+		metrics.Middleware, // record HTTP metrics for every request
 		middlewares.ResponseTimeMiddleware,
 		middlewares.Cors,
 	)

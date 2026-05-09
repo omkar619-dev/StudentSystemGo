@@ -1,0 +1,16 @@
+# Tells Grafana to scan a folder for dashboard JSON files and auto-import them.
+# Drop a new .json in /var/lib/grafana/dashboards/ → Grafana picks it up on next refresh.
+
+apiVersion: 1
+
+providers:
+  - name: studentsystemgo
+    orgId: 1
+    folder: ""              # top-level folder in Grafana sidebar
+    type: file
+    disableDeletion: false
+    editable: true          # allow tweaking via UI; export changes back to JSON later
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

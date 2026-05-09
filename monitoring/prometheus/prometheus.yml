@@ -1,0 +1,54 @@
+# Prometheus scrape configuration.
+#
+# Prometheus runs in a container and reaches every other service via Docker DNS.
+# Each `job_name` defines a target (or set of targets) to scrape.
+#
+# `scrape_interval` = how often to fetch /metrics. 15s is the standard.
+# Lower (5s) = more responsive dashboards but heavier load on apps + storage.
+# Higher (60s) = lighter but you miss short-lived spikes.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  # External labels — added to all metrics. Useful when you have multiple
+  # Prometheus instances feeding a central system; keeps them distinguishable.
+  external_labels:
+    project: studentsystemgo
+    env: dev
+
+scrape_configs:
+  # ── Prometheus itself ───────────────────────────────
+  # Always scrape your own monitoring system. Otherwise you can't tell
+  # if Prometheus is up.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ── Go API ──────────────────────────────────────────
+  - job_name: studentsystemgo-app
+    static_configs:
+      - targets: ["app:3000"]
+    metrics_path: /metrics
+
+  # ── RabbitMQ (built-in Prometheus plugin) ───────────
+  # We enable the plugin via env var on the rabbitmq container.
+  # Default endpoint: :15692/metrics (separate port from management UI).
+  - job_name: rabbitmq
+    static_configs:
+      - targets: ["rabbitmq:15692"]
+    metrics_path: /metrics
+
+  # ── Redis (via redis_exporter sidecar) ──────────────
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  # ── MariaDB primary (via mysqld-exporter sidecar) ───
+  - job_name: mysql_primary
+    static_configs:
+      - targets: ["mysqld-exporter-primary:9104"]
+
+  # ── MariaDB replica ─────────────────────────────────
+  - job_name: mysql_replica
+    static_configs:
+      - targets: ["mysqld-exporter-replica:9104"]

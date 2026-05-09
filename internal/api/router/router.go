@@ -1,6 +1,10 @@
 package router
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
 
 func MainRouter() *http.ServeMux {
 	tRouter := teachersRouter()
@@ -12,6 +16,10 @@ func MainRouter() *http.ServeMux {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
 	})
+
+	// /metrics — Prometheus scrape target. Exposed without auth (private network).
+	// In production with public-facing app, restrict via firewall / nginx.
+	eRouter.Handle("GET /metrics", promhttp.Handler())
 
 	sRouter.Handle("/", eRouter)
 	tRouter.Handle("/", sRouter)

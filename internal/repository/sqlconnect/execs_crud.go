@@ -15,8 +15,6 @@ import (
 
 	"restapi/internal/models"
 	"restapi/pkg/utils"
-
-	"github.com/go-mail/mail/v2"
 )
 
 func GetExecsDBHandler(execs []models.Exec, r *http.Request) ([]models.Exec, error) {
@@ -374,70 +372,65 @@ func UpdatePasswordinDB(userId int, currentPassword, newPassword string)(bool, e
 	return true,nil
 }
 
-func ForgotPasswordDBHandler(emailId string) error {
+// ResetTokenInfo bundles the data the caller needs after preparing a
+// password-reset token: the URL-safe token string (for the email link)
+// and the human-readable expiry timestamp (RFC3339).
+type ResetTokenInfo struct {
+	Token     string
+	Username  string
+	ExpiresAt time.Time
+}
+
+// PrepareResetToken creates a password-reset token, persists its hash to
+// the user row, and returns the data needed to email the user.
+//
+// Refactored from the old ForgotPasswordDBHandler — it used to send the
+// email synchronously here too, but that's now moved to the worker
+// (consumes from RabbitMQ). This function is DB-only.
+func PrepareResetToken(emailId string) (*ResetTokenInfo, error) {
 	db, err := ConnectDb("schooldb")
 	if err != nil {
-		return utils.ErrorHandler(err, "Internal error")
-		
+		return nil, utils.ErrorHandler(err, "Internal error")
 	}
-	// shared pool — do not close
 
 	var exec models.Exec
-	err = db.QueryRow("SELECT id FROM execs WHERE  email=?",emailId).Scan(&exec.ID)
+	err = db.QueryRow("SELECT id, username FROM execs WHERE email = ?", emailId).
+		Scan(&exec.ID, &exec.Username)
 	if err != nil {
-		return  utils.ErrorHandler(err, "User not ofound")
-		
-
+		return nil, utils.ErrorHandler(err, "User not found")
 	}
 
 	duration, err := strconv.Atoi(os.Getenv("RESET_TOKEN_EXP_DURATION"))
 	if err != nil {
-		return  utils.ErrorHandler(err, "Failed to send password reset email")
-		
+		return nil, utils.ErrorHandler(err, "Failed to prepare password reset")
 	}
-	mins := time.Duration(duration)
 
-	expiry := time.Now().Add(mins * time.Minute).Format("2006-01-02 15:04:05")
+	expiresAt := time.Now().Add(time.Duration(duration) * time.Minute)
 
 	tokenBytes := make([]byte, 32)
-
-	_, err = rand.Read(tokenBytes)
-	if err != nil {
-		return  utils.ErrorHandler(err, "Failed to send password reset mail")
-		
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return nil, utils.ErrorHandler(err, "Failed to prepare password reset")
 	}
 
-	log.Println("TokenBYtes:", tokenBytes)
 	token := hex.EncodeToString(tokenBytes)
-	log.Println("Token:", token)
-
 	hashedToken := sha256.Sum256(tokenBytes)
-	log.Println("hashedToken:", hashedToken)
-
 	hashedTokenString := hex.EncodeToString(hashedToken[:])
-	_, err = db.Exec("UPDATE execs SET password_reset_code = ?, password_reset_code_expires = ? WHERE id = ?", hashedTokenString, expiry, exec.ID)
+
+	// Store the HASH in the DB; the raw token only goes out via email.
+	// On reset, user provides token → we hash and compare.
+	_, err = db.Exec(
+		"UPDATE execs SET password_reset_code = ?, password_reset_code_expires = ? WHERE id = ?",
+		hashedTokenString, expiresAt.Format("2006-01-02 15:04:05"), exec.ID,
+	)
 	if err != nil {
-		return  utils.ErrorHandler(err, "Failed to send password reset email")
-		
+		return nil, utils.ErrorHandler(err, "Failed to prepare password reset")
 	}
 
-	// Email
-	resetURL := fmt.Sprintf("https://localhost:3000/execs/resetpassword/reset/%s", token)
-	message := fmt.Sprintf("Forgot your password? Reset your password using the following link:\n%s\nIf you did no request a password reset, please ignore this email This link is only valid for %d minutes.", resetURL, int(mins))
-
-	m := mail.NewMessage()
-	m.SetHeader("From", "schooladmin@school.com")
-	m.SetHeader("To", emailId)
-	m.SetHeader("Subject", "Your password reset link")
-	m.SetBody("text/plain", message)
-
-	d := mail.NewDialer("localhost", 1025, "", "")
-	err = d.DialAndSend(m)
-	if err != nil {
-		return  utils.ErrorHandler(err, "Failed to send password reset email")
-		
-	}
-	return nil
+	return &ResetTokenInfo{
+		Token:     token,
+		Username:  exec.Username,
+		ExpiresAt: expiresAt,
+	}, nil
 }
 
 

@@ -1,0 +1,19 @@
+# Datasource config — auto-loaded by Grafana on startup.
+# Tells Grafana "there's a Prometheus instance at this URL, query it for everything."
+#
+# Without this file, you'd click through the Grafana UI to add a datasource manually.
+# Provisioning makes the setup reproducible: blow away grafana_data, restart, get
+# the same datasource back.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus         # explicit — referenced by dashboard JSONs
+    type: prometheus
+    access: proxy           # Grafana proxies queries — browser doesn't talk to Prom directly
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false         # prevent UI edits — config drift kills reproducibility
+    jsonData:
+      timeInterval: 15s     # matches Prometheus scrape_interval

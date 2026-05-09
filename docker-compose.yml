@@ -75,6 +75,134 @@ services:
     networks:
       - app-net
 
+  # ── RabbitMQ — message broker for async work ──────────────
+  # `management` flavor includes the web UI on :15672 — useful for dev
+  # debugging (queue lengths, consumers, message rates).
+  # alpine variant is ~50MB smaller than full image.
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: studentsystemgo-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbit}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitpass}
+      # Enable the built-in Prometheus plugin. Exposes /metrics on :15692.
+      RABBITMQ_PLUGINS: "rabbitmq_management rabbitmq_prometheus"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"     # AMQP protocol (clients connect here)
+      - "15672:15672"   # Management UI (browser at http://localhost:15672)
+      - "15692:15692"   # Prometheus metrics endpoint
+    healthcheck:
+      # `rabbitmq-diagnostics check_port_connectivity` is fast and reliable.
+      # check_running waits for full boot which takes ~20s.
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-net
+
+  # ── Grafana — dashboards over Prometheus ─────────────────
+  # Provisioning files mounted read-only auto-configure datasource + dashboards.
+  # Default login: admin / admin (it forces a change on first login;
+  # set the env var to skip the prompt).
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: studentsystemgo-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"   # avoid clash with our app on :3000
+    depends_on:
+      - prometheus
+    networks:
+      - app-net
+
+  # ── Prometheus — pull-based metrics collector ─────────────
+  # Reads scrape config from monitoring/prometheus/prometheus.yml.
+  # Stores time-series in a local volume. Web UI at :9090.
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: studentsystemgo-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"  # keep 15 days of data
+      - "--web.enable-lifecycle"             # allow config reload via HTTP POST
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - app-net
+
+  # ── Redis exporter ────────────────────────────────────────
+  # Translates Redis INFO output into Prometheus format.
+  # Runs as a sidecar — talks to redis on the docker network.
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    container_name: studentsystemgo-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    expose:
+      - "9121"   # internal-only; prometheus scrapes here
+    depends_on:
+      - redis
+    networks:
+      - app-net
+
+  # ── MariaDB exporters (one per DB) ────────────────────────
+  # Reads `SHOW STATUS`, `SHOW VARIABLES`, etc. via SQL.
+  # Needs a user with PROCESS, REPLICATION CLIENT, SELECT privileges.
+  # We use root for simplicity in dev; prod would use a scoped user.
+  mysqld-exporter-primary:
+    image: prom/mysqld-exporter:v0.15.1
+    container_name: studentsystemgo-mysqld-exporter-primary
+    restart: unless-stopped
+    command:
+      - "--mysqld.address=mysql_primary:3306"
+      - "--mysqld.username=root"
+    environment:
+      MYSQLD_EXPORTER_PASSWORD: ${DB_PASSWORD}
+    expose:
+      - "9104"
+    depends_on:
+      mysql_primary:
+        condition: service_healthy
+    networks:
+      - app-net
+
+  mysqld-exporter-replica:
+    image: prom/mysqld-exporter:v0.15.1
+    container_name: studentsystemgo-mysqld-exporter-replica
+    restart: unless-stopped
+    command:
+      - "--mysqld.address=mysql_replica:3306"
+      - "--mysqld.username=root"
+    environment:
+      MYSQLD_EXPORTER_PASSWORD: ${DB_PASSWORD}
+    expose:
+      - "9104"
+    depends_on:
+      mysql_replica:
+        condition: service_healthy
+    networks:
+      - app-net
+
   app:
     build: .
     container_name: studentsystemgo-app
@@ -90,6 +218,8 @@ services:
       DB_NAME: ${DB_NAME}
       USE_TLS: "false"
       REDIS_URL: redis://redis:6379
+      # RabbitMQ connection. URL format: amqp://user:pass@host:port/
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbitpass}@rabbitmq:5672/
       # Photo storage — values come from .env
       S3_BUCKET: ${S3_BUCKET}
       S3_REGION: ${S3_REGION}
@@ -114,6 +244,29 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-net
+
+  # ── Worker ───────────────────────────────────────────────
+  # Same Docker image as the app, but launches the worker binary
+  # instead of the HTTP server. Consumes RabbitMQ queues and
+  # performs async tasks (sending password-reset emails, etc.).
+  #
+  # Uses MOCK mailer in dev — emails go to stdout, not real SMTP.
+  worker:
+    build: .
+    container_name: studentsystemgo-worker
+    command: ["/app/worker"]   # override default CMD (/app/server)
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbitpass}@rabbitmq:5672/
+      MAILER_TYPE: mock          # `mock` = log to stdout. Real SMTP comes later.
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     networks:
       - app-net
 
@@ -124,3 +277,6 @@ volumes:
   mysql_primary_data:
   mysql_replica_data:
   redis_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
