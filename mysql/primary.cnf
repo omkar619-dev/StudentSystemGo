@@ -34,5 +34,7 @@ expire_logs_days = 7
 
 # ── Memory tuning for t3.micro ────────────────────────────
 # Default buffer pool (128M) is too big when running primary + replica
-# alongside apps + Redis on 1 GB RAM.
-innodb_buffer_pool_size = 96M
+# alongside apps + Redis + RabbitMQ + worker on 1 GB RAM.
+# Dropped from 96M → 64M after Step 9 to free room for RabbitMQ.
+# Trade-off: ~5-10% slower queries on cold cache; minor for our workload.
+innodb_buffer_pool_size = 64M

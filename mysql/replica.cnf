@@ -27,4 +27,5 @@ log_slave_updates = ON
 gtid_strict_mode = ON
 
 # ── Same memory tuning as primary ────────────────────────
-innodb_buffer_pool_size = 96M
+# 96M → 64M after Step 9 (RabbitMQ + worker added; need to free RAM).
+innodb_buffer_pool_size = 64M
