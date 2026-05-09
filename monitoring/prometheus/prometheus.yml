@@ -24,11 +24,25 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # ── Go API ──────────────────────────────────────────
+  # ── Go API (local dev) ──────────────────────────────
   - job_name: studentsystemgo-app
     static_configs:
       - targets: ["app:3000"]
+        labels:
+          env: local
     metrics_path: /metrics
+
+  # ── Go API (prod on EC2) ────────────────────────────
+  # Scrapes the public /metrics through nginx. Adds 30-50ms internet
+  # latency per scrape — no impact on accuracy of the data, just adds
+  # delay before metrics show up.
+  - job_name: studentsystemgo-app-prod
+    static_configs:
+      - targets: ["13.126.165.62:80"]
+        labels:
+          env: prod
+    metrics_path: /metrics
+    scheme: http
 
   # ── RabbitMQ (built-in Prometheus plugin) ───────────
   # We enable the plugin via env var on the rabbitmq container.
