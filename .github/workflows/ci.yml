@@ -163,7 +163,7 @@ jobs:
 
   deploy-k3s:
     name: Deploy to k3s (Old PC homelab)
-    needs: docker-build-push    # wait for image to be pushed to ghcr.io
+    needs: docker-build    # wait for image to be pushed to ghcr.io
     runs-on: self-hosted
     steps:
       - name: Checkout
