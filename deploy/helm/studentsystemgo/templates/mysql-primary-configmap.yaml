@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "studentsystemgo.fullname" . }}-mysql-primary
+  labels:
+    {{- include "studentsystemgo.labels" . | nindent 4 }}
+data:
+  # Mounted at /etc/mysql/conf.d/primary.cnf — MariaDB merges with defaults
+  primary.cnf: |
+    [mariadb]
+    server-id = 1
+
+    log_bin = mysql-bin
+    log_bin_index = mysql-bin.index
+    binlog_format = ROW
+    binlog_row_image = FULL
+
+    gtid_strict_mode = ON
+    sync_binlog = 0
+    expire_logs_days = 7
+
+    innodb_buffer_pool_size = 64M
+
+  # Mounted at /docker-entrypoint-initdb.d/00-replication-user.sql
+  # MariaDB's entrypoint runs SQL files from that dir on FIRST boot only.
+  # Helm-templated so the password comes from values.yaml.
+  00-replication-user.sql: |
+    CREATE OR REPLACE USER 'replicator'@'%' IDENTIFIED BY '{{ .Values.mysql.replication.password }}';
+    GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';
+    FLUSH PRIVILEGES;

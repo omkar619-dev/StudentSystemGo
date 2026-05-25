@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "studentsystemgo.fullname" . }}
+  labels:
+    {{- include "studentsystemgo.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.hpa.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "studentsystemgo.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: app
+  template:
+    metadata:
+      labels:
+        {{- include "studentsystemgo.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: app
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+          env:
+            # ── Secret-backed env vars ──────────────────────────
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "studentsystemgo.fullname" . }}-app
+                  key: db-password
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "studentsystemgo.fullname" . }}-app
+                  key: jwt-secret
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "studentsystemgo.fullname" . }}-rabbitmq
+                  key: url
+            # ── Non-sensitive env vars from values.env ───────────
+            {{- range $key, $value := .Values.env }}
+            {{- if and (ne $key "DB_PASSWORD") (ne $key "JWT_SECRET") (ne $key "RABBITMQ_URL") }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: cloudfront-key
+              mountPath: /etc/secrets
+              readOnly: true
+      volumes:
+        - name: cloudfront-key
+          secret:
+            secretName: {{ include "studentsystemgo.fullname" . }}-cloudfront-key

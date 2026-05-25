@@ -1,0 +1,163 @@
+# ─── Image ────────────────────────────────────────────────────
+image:
+  repository: ghcr.io/omkar619-dev/studentsystemgo
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# ─── How many app pods ────────────────────────────────────────
+replicaCount: 1
+
+# ─── Port the Go app listens on inside the container ──────────
+containerPort: 3000
+
+# ─── Service (how other pods reach this app) ──────────────────
+service:
+  type: ClusterIP
+  port: 3000
+
+# ─── Environment variables for the app ────────────────────────
+# WARNING: secrets are in plain text here for Session 2.
+# Session 5 will move sensitive ones to Kubernetes Secrets.
+# ─── MySQL (MariaDB primary + replica) ────────────────────────
+mysql:
+  image:
+    repository: mariadb
+    tag: "11"
+    pullPolicy: IfNotPresent
+
+  # Database name + root password.
+  # Plaintext for Session 3 — will move to external Secret in Session 5.
+  database: schooldb
+  rootPassword: "" 
+
+  # Replication credentials. Both primary (creates user) and replica
+  # (CHANGE MASTER) need access.
+  replication:
+    user: replicator
+    password: "" 
+
+  primary:
+    # Disk size per pod. local-path-provisioner on k3d/k3s honors this.
+    storage: 1Gi
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "384Mi"
+        cpu: "500m"
+  replica:
+    storage: 1Gi
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "384Mi"
+        cpu: "500m"
+
+# ─── Redis (rate limiter + cache-aside) ───────────────────────
+redis:
+  image:
+    repository: public.ecr.aws/docker/library/redis
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
+  storage: 1Gi
+  resources:
+    requests:
+      memory: "32Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "200m"
+
+# ─── RabbitMQ (async work queue) ──────────────────────────────
+# ─── RabbitMQ (async work queue) ──────────────────────────────
+rabbitmq:
+  image:
+    repository: rabbitmq
+    tag: "3.13-management-alpine"
+    pullPolicy: IfNotPresent
+  # Default 'guest' user is restricted to localhost in the official image,
+  # so we MUST create a non-default user for cluster-network access.
+  defaultUser: admin
+  defaultPass: ""        # REQUIRED: provide via secrets.values.yaml
+  storage: 1Gi
+  resources:
+    requests:
+      memory: "200Mi"
+      cpu: "100m"
+    limits:
+      memory: "384Mi"
+      cpu: "500m"
+
+# ─── Worker (RabbitMQ consumer — sends mock emails) ───────────
+worker:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "32Mi"
+      cpu: "25m"
+    limits:
+      memory: "64Mi"
+      cpu: "100m"
+  mailerType: mock
+env:
+  DB_PRIMARY_HOST: "mysql-primary"
+  DB_REPLICA_HOST: "mysql-replica"
+  DB_PASSWORD: ""       # REQUIRED: provide via secrets.values.yaml
+  JWT_SECRET: ""        # REQUIRED: provide via secrets.values.yaml
+  DB_PORT: "3306"
+  DB_USER: "root"
+  DB_NAME: "schooldb"
+  USE_TLS: "false"
+  JWT_EXPIRES_IN: "6000s"
+  RESET_TOKEN_EXP_DURATION: "10"
+  REDIS_URL: "redis://redis:6379"
+  RABBITMQ_URL: "amqp://admin:rabbitpass@rabbitmq:5672/"
+  S3_BUCKET: "dummy-not-used-in-dev"
+  S3_REGION: "ap-south-1"
+  CF_DOMAIN: "dummy.cloudfront.net"
+  CF_KEY_PAIR_ID: "DUMMY"
+  CF_PRIVATE_KEY_PATH: "/etc/secrets/cloudfront_private_key.pem"
+
+# ─── Resource requests + limits per pod ───────────────────────
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "50m"
+  limits:
+    memory: "128Mi"
+    cpu: "200m"
+
+# ─── Health probes ────────────────────────────────────────────
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 3000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  failureThreshold: 3
+
+# ─── HorizontalPodAutoscaler ──────────────────────────────────
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3        # tight ceiling for Old PC RAM budget
+  targetCPUUtilizationPercentage: 70
+
+# ─── Ingress (external access) ────────────────────────────────
+ingress:
+  enabled: true
+  className: traefik
+  host: studentsystemgo.local
+  # TLS deferred to Session 6 when we use cert-manager on Old PC
+  tls: false

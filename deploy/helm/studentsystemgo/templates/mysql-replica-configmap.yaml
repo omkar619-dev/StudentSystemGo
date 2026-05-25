@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "studentsystemgo.fullname" . }}-mysql-replica
+  labels:
+    {{- include "studentsystemgo.labels" . | nindent 4 }}
+data:
+  # Mounted at /etc/mysql/conf.d/replica.cnf
+  replica.cnf: |
+    [mariadb]
+    server-id = 2
+
+    relay_log = relay-bin
+    relay_log_index = relay-bin.index
+
+    read_only = ON
+
+    log_bin = mysql-bin
+    log_slave_updates = ON
+
+    gtid_strict_mode = ON
+
+    innodb_buffer_pool_size = 64M
+
+  # Mounted at /docker-entrypoint-initdb.d/99-set-up-replication.sql
+  # Runs ONLY on first boot (when data dir is empty).
+  # Helm-templated for password from values.yaml.
+  99-set-up-replication.sql: |
+    -- Wipe replica's local GTID counter — required when gtid_strict_mode=ON
+    -- so the replica accepts primary's binlog history starting from GTID 0-1-1.
+    RESET MASTER;
+
+    CHANGE MASTER TO
+      MASTER_HOST='mysql-primary',
+      MASTER_PORT=3306,
+      MASTER_USER='{{ .Values.mysql.replication.user }}',
+      MASTER_PASSWORD='{{ .Values.mysql.replication.password }}',
+      MASTER_USE_GTID=slave_pos,
+      MASTER_CONNECT_RETRY=10;
+
+    START SLAVE;

@@ -1,0 +1,26 @@
+─── External access ──────────────────────────────────────────
+
+{{- if .Values.ingress.enabled }}
+Ingress URL (add to /etc/hosts):
+  {{ .Values.ingress.host }} → http://{{ .Values.ingress.host }}
+
+For k3d (port 8081 mapped to loadbalancer):
+  curl -H "Host: {{ .Values.ingress.host }}" http://localhost:8081/healthz
+{{- else }}
+Ingress disabled. Use port-forward:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "studentsystemgo.fullname" . }} 8080:{{ .Values.service.port }}
+{{- end }}
+
+─── Autoscaling ──────────────────────────────────────────────
+
+{{- if .Values.hpa.enabled }}
+HPA configured: {{ .Values.hpa.minReplicas }}-{{ .Values.hpa.maxReplicas }} pods, target CPU {{ .Values.hpa.targetCPUUtilizationPercentage }}%
+
+Watch HPA decisions:
+  kubectl get hpa -n {{ .Release.Namespace }} -w
+{{- end }}
+
+─── Verify secrets are properly sourced ──────────────────────
+
+  kubectl get pod -n {{ .Release.Namespace }} -l "app.kubernetes.io/component=app" \
+    -o jsonpath='{.items[0].spec.containers[0].env}' | jq

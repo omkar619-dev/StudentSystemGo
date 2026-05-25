@@ -82,3 +82,6 @@ postgres_data/
 Thumbs.db
 .idea/
 .vscode/
+
+deploy/helm/studentsystemgo/secrets.values.yaml
+deploy/helm/studentsystemgo/secrets.values.yaml

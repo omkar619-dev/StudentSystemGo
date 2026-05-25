@@ -1,0 +1,19 @@
+apiVersion: v2
+name: studentsystemgo
+description: Go REST API for school management — deployed on Kubernetes via Helm
+type: application
+
+# The CHART version. Bump when YOU edit chart files (templates, values structure).
+version: 0.1.0
+
+# The APP version (the Go binary version inside the image). Bump on app releases.
+appVersion: "0.1.0"
+
+keywords:
+  - go
+  - rest-api
+  - school-management
+
+maintainers:
+  - name: Omkar
+    url: https://github.com/omkar619-dev
