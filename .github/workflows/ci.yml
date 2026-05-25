@@ -173,10 +173,9 @@ jobs:
         env:
           KUBECONFIG: /etc/rancher/k3s/k3s.yaml
         run: |
-          helm upgrade --install ssg deploy/helm/studentsystemgo \
+          helm upgrade --install ssg ./deploy/helm/studentsystemgo \
             --namespace studentsystemgo \
             --create-namespace \
-            -f deploy/helm/studentsystemgo/values.yaml \
             -f /home/omkarshendge619/k3s-deploy/studentsystemgo-secrets.values.yaml \
             --set image.tag=${{ github.sha }} \
             --atomic \
