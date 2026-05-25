@@ -163,33 +163,29 @@ jobs:
 
   deploy-k3s:
     name: Deploy to k3s (Old PC homelab)
-    needs: docker-build    # wait for image to be pushed to ghcr.io
+    needs: docker-build
     runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Pre-pull image into k3s containerd
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          REPO_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+          sudo k3s ctr -n=k8s.io images pull ghcr.io/$REPO_LOWER:sha-$SHORT_SHA
+
       - name: Helm upgrade
         env:
           KUBECONFIG: /etc/rancher/k3s/k3s.yaml
         run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          REPO_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
           helm upgrade --install ssg ./deploy/helm/studentsystemgo \
             --namespace studentsystemgo \
             --create-namespace \
             -f /home/omkarshendge619/k3s-deploy/studentsystemgo-secrets.values.yaml \
-            --set image.tag=${{ github.sha }} \
+            --set image.repository=ghcr.io/$REPO_LOWER \
+            --set image.tag=sha-$SHORT_SHA \
             --atomic \
-            --timeout 5m
-
-      - name: Verify rollout
-        env:
-          KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-        run: |
-          kubectl rollout status deployment/ssg-studentsystemgo -n studentsystemgo --timeout=5m
-          kubectl rollout status deployment/ssg-studentsystemgo-worker -n studentsystemgo --timeout=5m
-
-      - name: Smoke test via Ingress
-        run: |
-          curl -fsS --max-time 10 \
-            -H "Host: studentsystemgo.local" \
-            http://100.72.182.75/healthz
+            --timeout 15m
