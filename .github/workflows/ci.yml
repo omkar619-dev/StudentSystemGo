@@ -160,3 +160,37 @@ jobs:
           curl -fs --max-time 5 "http://${{ secrets.EC2_HOST }}/nginx-health"
           echo ""
           echo "✅ Nginx is responsive"
+
+  deploy-k3s:
+    name: Deploy to k3s (Old PC homelab)
+    needs: docker-build-push    # wait for image to be pushed to ghcr.io
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Helm upgrade
+        env:
+          KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+        run: |
+          helm upgrade --install ssg deploy/helm/studentsystemgo \
+            --namespace studentsystemgo \
+            --create-namespace \
+            -f deploy/helm/studentsystemgo/values.yaml \
+            -f /home/omkarshendge619/k3s-deploy/studentsystemgo-secrets.values.yaml \
+            --set image.tag=${{ github.sha }} \
+            --atomic \
+            --timeout 5m
+
+      - name: Verify rollout
+        env:
+          KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+        run: |
+          kubectl rollout status deployment/ssg-studentsystemgo -n studentsystemgo --timeout=5m
+          kubectl rollout status deployment/ssg-studentsystemgo-worker -n studentsystemgo --timeout=5m
+
+      - name: Smoke test via Ingress
+        run: |
+          curl -fsS --max-time 10 \
+            -H "Host: studentsystemgo.local" \
+            http://100.72.182.75/healthz
