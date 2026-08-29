@@ -85,3 +85,10 @@ Thumbs.db
 
 deploy/helm/studentsystemgo/secrets.values.yaml
 deploy/helm/studentsystemgo/secrets.values.yaml
+
+# personal documents - never commit
+resume*
+omkar_infra*
+*.aux
+*.log
+*.pdf
