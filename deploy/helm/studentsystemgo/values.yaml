@@ -4,6 +4,15 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
+# ─── Secrets ──────────────────────────────────────────────────
+# When true (default, and what `helm install` locally does) the chart
+# renders its own Secret objects from the values below.
+# Set false under GitOps: ArgoCD supplies SealedSecrets with the same
+# names instead, so no plaintext ever reaches Git and the CloudFront
+# key stops being regenerated on every render.
+secrets:
+  create: true
+
 # ─── How many app pods ────────────────────────────────────────
 replicaCount: 1
 
