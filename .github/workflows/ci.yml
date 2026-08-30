@@ -99,36 +99,44 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ───────────────────────────────────────────────────────────
-  # Job 3: deploy to the k3s homelab (only on push to main)
+  # Job 3: bump the image tag in the GitOps repo (push to main only)
+  #
+  # This repo no longer deploys anything. It builds an image, pushes it
+  # to ghcr.io, and records the new tag in omkar-homelab-gitops. ArgoCD
+  # watches that repo and rolls the change out, so the homelab does not
+  # need to be reachable for CI to pass.
   # ───────────────────────────────────────────────────────────
-  deploy-k3s:
-    name: Deploy to k3s (Old PC homelab)
+  bump-gitops-tag:
+    name: Bump image tag in GitOps repo
     needs: docker-build
-    runs-on: self-hosted
-    # Never run on pull_request: this is a self-hosted runner on a public repo,
-    # so an unguarded PR trigger would execute fork code on the homelab box.
+    runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
     steps:
-      - name: Checkout
+      - name: Checkout the GitOps repo
         uses: actions/checkout@v4
+        with:
+          repository: omkar619-dev/omkar-homelab-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          ref: main
 
-      - name: Pre-pull image into k3s containerd
+      - name: Rewrite the image tag
         run: |
-          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          REPO_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-          sudo k3s ctr -n=k8s.io images pull ghcr.io/$REPO_LOWER:sha-$SHORT_SHA
+          set -e
+          NEW_TAG="sha-${GITHUB_SHA::7}"
+          FILE=apps/studentsystemgo/values.yaml
+          test -f "$FILE"
+          sed -i "s|^  tag: .*|  tag: ${NEW_TAG}|" "$FILE"
+          echo "now: $(grep -n '^  tag:' "$FILE")"
 
-      - name: Helm upgrade
-        env:
-          KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      - name: Commit and push if changed
         run: |
-          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          REPO_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-          helm upgrade --install ssg ./deploy/helm/studentsystemgo \
-            --namespace studentsystemgo \
-            --create-namespace \
-            -f /home/omkarshendge619/k3s-deploy/studentsystemgo-secrets.values.yaml \
-            --set image.repository=ghcr.io/$REPO_LOWER \
-            --set image.tag=sha-$SHORT_SHA \
-            --atomic \
-            --timeout 15m
+          set -e
+          if git diff --quiet; then
+            echo "tag already current, nothing to push"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(studentsystemgo): image tag sha-${GITHUB_SHA::7}"
+          git push
